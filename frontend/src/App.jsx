@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // 🔴 COLOQUE AQUI O SEU IP LOCAL (ex: "http://192.168.1.15:8000" para celular e PC)
-  const API_BASE_URL = "http://192.168.0.114:8000";
+  const API_BASE_URL = "https://ximed-app.onrender.com";  
   export default function App() {
   // --- ESTADOS DE AUTENTICAÇÃO ---
   const [token, setToken] = useState(localStorage.getItem('token') || '');
