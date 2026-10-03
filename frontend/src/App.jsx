@@ -1,22 +1,29 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Calendar, Search, Plus, CheckCircle2, 
   Clock, Menu, X, Trash2, Edit, CalendarDays, Inbox, Stethoscope,
-  Download, Activity, Users, XCircle
+  Download, Activity, Users, XCircle, LogOut, Lock, Eye, Building, Briefcase, FileText
 } from 'lucide-react';
 
+const API_BASE_URL = "http://localhost:8000";
+
 export default function App() {
+  // --- ESTADOS DE AUTENTICAÇÃO ---
+  const [token, setToken] = useState(localStorage.getItem('token') || '');
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [loginError, setLoginError] = useState('');
+
+  // --- ESTADOS NATIVOS DA APLICAÇÃO ---
   const [activeTab, setActiveTab] = useState('agendamentos');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('Todos');
   const [examSearchTerm, setExamSearchTerm] = useState('');
 
-  // URL da foto do logo da XIMED
   const logoUrl = "/ximed.jfif";
   const [appointments, setAppointments] = useState([]);
 
-  // --- CATÁLOGO DE EXAMES (22 EXAMES OCUPACIONAIS) ---
+  // CATÁLOGO DE EXAMES (22 EXAMES OCUPACIONAIS)
   const [exams] = useState([
     { id: 1, code: "EX-01", name: "Audiometria Ocupacional", category: "Auditivo", periodicity: "Anual" },
     { id: 2, code: "EX-02", name: "Raio-X de Tórax (PA / OIT)", category: "Imagem", periodicity: "Bienal" },
@@ -55,7 +62,9 @@ export default function App() {
         cpf: item.cpf,
         role: item.role || "Não informado",
         company: item.company || "XIMED Cliente",
-        status: statusASO
+        status: statusASO,
+        examName: item.examName,
+        date: item.date
       };
     });
   }, [appointments]);
@@ -63,6 +72,7 @@ export default function App() {
   // ESTADOS DOS MODAIS
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDateModalOpen, setIsDateModalOpen] = useState(false);
+  const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
 
   const [formData, setFormData] = useState({ 
@@ -70,6 +80,38 @@ export default function App() {
   });
 
   const [newDate, setNewDate] = useState('');
+
+  // --- AUTENTICAÇÃO ---
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoginError('');
+    try {
+      const bodyData = new URLSearchParams();
+      bodyData.append('username', loginForm.username);
+      bodyData.append('password', loginForm.password);
+
+      const response = await fetch(`${API_BASE_URL}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: bodyData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Credenciais inválidas. Tente admin / 123456');
+      }
+
+      const data = await response.json();
+      localStorage.setItem('token', data.access_token);
+      setToken(data.access_token);
+    } catch (err) {
+      setLoginError(err.message);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setToken('');
+  };
 
   // MÁSCARA DE CPF
   const formatCPF = (value) => {
@@ -85,7 +127,7 @@ export default function App() {
     setFormData({ ...formData, cpf: formatCPF(e.target.value) });
   };
 
-  // OPERAÇÕES DO CRUD
+  // OPERAÇÕES DO CRUD E MODAIS
   const handleOpenCreateModal = () => {
     setSelectedItem(null);
     setFormData({ patientName: '', cpf: '', examName: '', company: '', role: '', date: '', status: 'Pendente' });
@@ -104,6 +146,11 @@ export default function App() {
       status: item.status
     });
     setIsModalOpen(true);
+  };
+
+  const handleOpenQuickView = (item) => {
+    setSelectedItem(item);
+    setIsQuickViewOpen(true);
   };
 
   const handleSave = (e) => {
@@ -190,6 +237,67 @@ export default function App() {
   const pendingCount = appointments.filter(a => a.status === 'Pendente').length;
   const canceledCount = appointments.filter(a => a.status === 'Cancelado').length;
 
+  // --- TELA DE LOGIN SE NÃO ESTIVER AUTENTICADO ---
+  if (!token) {
+    return (
+      <div className="min-h-screen w-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 border border-slate-100">
+          <div className="text-center mb-8">
+            <div className="inline-flex p-3 rounded-2xl bg-blue-50 border border-blue-100 mb-3">
+              <img src={logoUrl} alt="XIMED" className="w-12 h-12 rounded-xl object-cover" />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900">XIMED Saúde Ocupacional</h1>
+            <p className="text-xs text-slate-500 mt-1">Aceda à plataforma com o utilizador do sistema</p>
+          </div>
+
+          {loginError && (
+            <div className="bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold p-3.5 rounded-xl mb-4 text-center">
+              {loginError}
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Utilizador</label>
+              <input
+                type="text"
+                required
+                placeholder="Ex: admin"
+                value={loginForm.username}
+                onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Palavra-passe</label>
+              <input
+                type="password"
+                required
+                placeholder="••••••••"
+                value={loginForm.password}
+                onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl text-sm shadow-md transition"
+            >
+              Iniciar Sessão
+            </button>
+          </form>
+
+          <div className="mt-6 pt-4 border-t border-slate-100 text-center text-xs text-slate-400">
+            Utilizador padrão: <span className="font-semibold text-slate-600">admin</span> / Senha: <span className="font-semibold text-slate-600">123456</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- PAINEL PRINCIPAL DA APLICAÇÃO ---
   return (
     <div className="h-screen w-screen bg-slate-100 text-slate-800 flex flex-col md:flex-row font-sans overflow-hidden">
       
@@ -209,7 +317,7 @@ export default function App() {
 
       {sidebarOpen && <div onClick={() => setSidebarOpen(false)} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 md:hidden" />}
 
-      {/* Sidebar Escura (Fixa na Tela) */}
+      {/* Sidebar Escura */}
       <aside className={`fixed md:static inset-y-0 left-0 z-50 w-72 bg-[#0A0F24] text-white p-6 flex flex-col justify-between shrink-0 h-full transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         <div>
           <div className="hidden md:flex items-center gap-3 mb-8 border-b border-slate-800/80 pb-6">
@@ -264,18 +372,27 @@ export default function App() {
           </nav>
         </div>
 
-        <div className="pt-4 border-t border-slate-800 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-blue-900/50 border border-blue-500/30 flex items-center justify-center font-bold text-blue-400 text-xs">
-            AV
+        <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-blue-900/50 border border-blue-500/30 flex items-center justify-center font-bold text-blue-400 text-xs">
+              AD
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white">Admin XIMED</p>
+              <p className="text-xs text-slate-400">Autenticado</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-semibold text-white">Avaliador XIMED</p>
-            <p className="text-xs text-slate-400">Ambiente de Teste REST</p>
-          </div>
+          <button 
+            onClick={handleLogout} 
+            title="Sair do sistema"
+            className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-xl transition"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
         </div>
       </aside>
 
-      {/* Conteúdo Principal (Com rolagem independente) */}
+      {/* Conteúdo Principal */}
       <main className="flex-1 h-full overflow-y-auto p-4 md:p-8">
         
         {/* ABA 1: AGENDAMENTOS OCUPACIONAIS */}
@@ -302,7 +419,7 @@ export default function App() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
               <StatCard title="Exames Confirmados" value={confirmedCount.toString()} subtitle="ASOs Realizados" icon={<CheckCircle2 className="text-emerald-600" />} />
               <StatCard title="Exames Pendentes" value={pendingCount.toString()} subtitle="Aguardando Confirmação" icon={<Clock className="text-amber-600" />} />
-              <StatCard title="Exames Cancelados / Deletados" value={canceledCount.toString()} subtitle="Agendamentos Cancelados" icon={<XCircle className="text-rose-600" />} />
+              <StatCard title="Exames Cancelados" value={canceledCount.toString()} subtitle="Agendamentos Cancelados" icon={<XCircle className="text-rose-600" />} />
             </div>
 
             <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-6 shadow-sm">
@@ -347,7 +464,14 @@ export default function App() {
                     {filteredAppointments.map((item) => (
                       <tr key={item.id} className="hover:bg-slate-50/80 transition">
                         <td className="py-3.5 px-4 font-semibold text-slate-800">
-                          {item.patientName}
+                          <button 
+                            onClick={() => handleOpenQuickView(item)}
+                            className="hover:text-blue-600 transition flex items-center gap-1.5 text-left"
+                            title="Clique para ver ficha rápida"
+                          >
+                            <span>{item.patientName}</span>
+                            <Eye className="w-3.5 h-3.5 text-slate-400 opacity-0 group-hover:opacity-100" />
+                          </button>
                           <div className="text-xs font-normal text-slate-400">{item.cpf || 'Sem CPF'}</div>
                         </td>
                         <td className="py-3.5 px-4 font-medium text-slate-700">
@@ -380,6 +504,9 @@ export default function App() {
                         </td>
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => handleOpenQuickView(item)} title="Ver Ficha Rápida" className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition">
+                              <Eye className="w-4 h-4" />
+                            </button>
                             <button onClick={() => handleOpenDateModal(item)} title="Alterar Data do Exame" className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition">
                               <CalendarDays className="w-4 h-4" />
                             </button>
@@ -426,6 +553,7 @@ export default function App() {
                     <th className="py-3 px-4">Cargo</th>
                     <th className="py-3 px-4">Empresa</th>
                     <th className="py-3 px-4">Status ASO</th>
+                    <th className="py-3 px-4 text-right">Ação</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -446,11 +574,19 @@ export default function App() {
                           {c.status}
                         </span>
                       </td>
+                      <td className="py-3.5 px-4 text-right">
+                        <button 
+                          onClick={() => handleOpenQuickView(c)}
+                          className="text-xs text-blue-600 hover:text-blue-800 font-semibold"
+                        >
+                          Ver Detalhes
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {collaborators.length === 0 && (
                     <tr>
-                      <td colSpan="5" className="text-center py-10 text-slate-400">
+                      <td colSpan="6" className="text-center py-10 text-slate-400">
                         Nenhum colaborador registrado. Cadastre um agendamento para adicionar automaticamente.
                       </td>
                     </tr>
@@ -573,8 +709,8 @@ export default function App() {
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm text-slate-600 font-semibold hover:bg-slate-100 rounded-xl transition">Cancelar</button>
-                <button type="submit" className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-xl font-semibold transition shadow-sm">Salvar Agendamento</button>
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancelar</button>
+                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold hover:bg-blue-700 shadow-md">Salvar</button>
               </div>
             </form>
           </div>
@@ -582,22 +718,86 @@ export default function App() {
       )}
 
       {/* MODAL 2: ALTERAR DATA */}
-      {isDateModalOpen && (
+      {isDateModalOpen && selectedItem && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl relative animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl max-w-xs w-full p-6 shadow-xl relative">
             <button onClick={() => setIsDateModalOpen(false)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg"><X className="w-5 h-5" /></button>
-            <h3 className="text-lg font-bold text-slate-900 mb-1">Alterar Data do Agendamento</h3>
-            <p className="text-xs text-slate-500 mb-4">Paciente: <strong className="text-slate-800">{selectedItem?.patientName}</strong></p>
-            <form onSubmit={handleSaveDate} className="space-y-3">
+            <h3 className="text-base font-bold text-slate-900 mb-3">Reagendar Exame</h3>
+            <p className="text-xs text-slate-500 mb-4">Paciente: <span className="font-semibold text-slate-800">{selectedItem.patientName}</span></p>
+            <form onSubmit={handleSaveDate} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">Nova Data e Hora</label>
-                <input type="text" required placeholder="Ex: 08/10/2026, 09:00" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none" />
+                <input type="text" required value={newDate} onChange={(e) => setNewDate(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none" />
               </div>
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                <button type="button" onClick={() => setIsDateModalOpen(false)} className="px-4 py-2 text-sm text-slate-600 font-semibold hover:bg-slate-100 rounded-xl transition">Cancelar</button>
-                <button type="submit" className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-xl font-semibold transition shadow-sm">Atualizar Data</button>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setIsDateModalOpen(false)} className="px-3 py-1.5 border rounded-xl text-xs font-semibold text-slate-600">Voltar</button>
+                <button type="submit" className="px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-semibold hover:bg-blue-700">Atualizar</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: QUICK VIEW (VISUALIZAÇÃO RÁPIDA DE COLABORADOR / EXAME) */}
+      {isQuickViewOpen && selectedItem && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative border border-slate-100">
+            <button onClick={() => setIsQuickViewOpen(false)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 font-bold text-lg">
+                {selectedItem.patientName ? selectedItem.patientName.charAt(0).toUpperCase() : 'C'}
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">{selectedItem.patientName || selectedItem.name}</h3>
+                <span className="text-xs text-slate-500">CPF: {selectedItem.cpf || 'Não cadastrado'}</span>
+              </div>
+            </div>
+
+            <div className="space-y-3 text-sm text-slate-700 mb-6">
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold">
+                  <Building className="w-4 h-4 text-slate-400" />
+                  <span>Empresa</span>
+                </div>
+                <span className="font-semibold text-slate-800">{selectedItem.company || 'XIMED Cliente'}</span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold">
+                  <Briefcase className="w-4 h-4 text-slate-400" />
+                  <span>Cargo</span>
+                </div>
+                <span className="font-semibold text-slate-800">{selectedItem.role || 'Não informado'}</span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold">
+                  <Stethoscope className="w-4 h-4 text-slate-400" />
+                  <span>Exame Registado</span>
+                </div>
+                <span className="font-semibold text-blue-600">{selectedItem.examName || 'ASO Ocupacional'}</span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold">
+                  <Calendar className="w-4 h-4 text-slate-400" />
+                  <span>Data / Hora</span>
+                </div>
+                <span className="font-semibold text-slate-800">{selectedItem.date || 'Sem data'}</span>
+              </div>
+            </div>
+
+            <div className="flex justify-end border-t border-slate-100 pt-4">
+              <button 
+                onClick={() => setIsQuickViewOpen(false)}
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2 rounded-xl text-xs shadow-sm transition"
+              >
+                Fechar Ficha
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -606,15 +806,16 @@ export default function App() {
   );
 }
 
+// COMPONENTE AUXILIAR PARA OS CARDS DE ESTATÍSTICA
 function StatCard({ title, value, subtitle, icon }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex items-center justify-between">
+    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex items-center justify-between">
       <div>
-        <span className="text-slate-500 text-xs font-medium block mb-1">{title}</span>
-        <span className="text-2xl font-bold text-slate-900">{value}</span>
-        {subtitle && <span className="text-[11px] text-slate-400 block mt-1">{subtitle}</span>}
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">{title}</span>
+        <div className="text-2xl font-bold text-slate-900">{value}</div>
+        <span className="text-xs text-slate-500">{subtitle}</span>
       </div>
-      <div className="p-3 bg-slate-50 rounded-xl">{icon}</div>
+      <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">{icon}</div>
     </div>
   );
 }
