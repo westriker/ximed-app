@@ -2,15 +2,15 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Calendar, Search, Plus, CheckCircle2, 
   Clock, Menu, X, Trash2, Edit, CalendarDays, Inbox, Stethoscope,
-  Download, Activity, Users, XCircle, LogOut, Lock, Eye, Building, Briefcase, FileText
+  Download, Activity, Users, XCircle, LogOut, Eye
 } from 'lucide-react';
 
-const API_BASE_URL = "http://localhost:8000";
-
-export default function App() {
+// 🔴 COLOQUE AQUI O SEU IP LOCAL (ex: "http://192.168.1.15:8000" para celular e PC)
+  const API_BASE_URL = "http://192.168.0.114:8000";
+  export default function App() {
   // --- ESTADOS DE AUTENTICAÇÃO ---
   const [token, setToken] = useState(localStorage.getItem('token') || '');
-  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [loginForm, setLoginForm] = useState({ username: 'admin', password: '123' });
   const [loginError, setLoginError] = useState('');
 
   // --- ESTADOS NATIVOS DA APLICAÇÃO ---
@@ -22,32 +22,63 @@ export default function App() {
 
   const logoUrl = "/ximed.jfif";
   const [appointments, setAppointments] = useState([]);
+  const [exams, setExams] = useState([]);
 
-  // CATÁLOGO DE EXAMES (22 EXAMES OCUPACIONAIS)
-  const [exams] = useState([
-    { id: 1, code: "EX-01", name: "Audiometria Ocupacional", category: "Auditivo", periodicity: "Anual" },
-    { id: 2, code: "EX-02", name: "Raio-X de Tórax (PA / OIT)", category: "Imagem", periodicity: "Bienal" },
-    { id: 3, code: "EX-03", name: "Hemograma Completo", category: "Laboratorial", periodicity: "Anual" },
-    { id: 4, code: "EX-04", name: "Espirometria Ocupacional", category: "Respiratório", periodicity: "Anual" },
-    { id: 5, code: "EX-05", name: "Eletrocardiograma (ECG)", category: "Cardiológico", periodicity: "Anual" },
-    { id: 6, code: "EX-06", name: "Eletroencefalograma (EEG)", category: "Neurológico", periodicity: "Anual" },
-    { id: 7, code: "EX-07", name: "Auidade Visual", category: "Oftalmológico", periodicity: "Anual" },
-    { id: 8, code: "EX-08", name: "Glicemia de Jejum", category: "Laboratorial", periodicity: "Anual" },
-    { id: 9, code: "EX-09", name: "Avaliação Psicológica / Psicossocial", category: "Mental / NR-33 / NR-35", periodicity: "Bienal" },
-    { id: 10, code: "EX-10", name: "Toxicológico de Larga Janela", category: "Laboratorial / CNH", periodicity: "Periódico" },
-    { id: 11, code: "EX-11", name: "Telerradiografia de Coluna Total", category: "Imagem", periodicity: "Bienal" },
-    { id: 12, code: "EX-12", name: "Vetosquinometria", category: "Auditivo / Labirinto", periodicity: "Anual" },
-    { id: 13, code: "EX-13", name: "Coprocultura e Parasitológico", category: "Laboratorial / Alimentação", periodicity: "Semestral" },
-    { id: 14, code: "EX-14", name: "Exame Clínico Ocupacional (ASO)", category: "Clínico Geral", periodicity: "Conforme Risco" },
-    { id: 15, code: "EX-15", name: "Gama GT e TGO/TGP (Função Hepática)", category: "Laboratorial", periodicity: "Anual" },
-    { id: 16, code: "EX-16", name: "Ureia e Creatinina (Função Renal)", category: "Laboratorial", periodicity: "Anual" },
-    { id: 17, code: "EX-17", name: "Dosagem de Chumbo Sangue (Plumbemia)", category: "Toxicologia / Químico", periodicity: "Semestral" },
-    { id: 18, code: "EX-18", name: "Ácido Metil-Hipúrico (Solventes)", category: "Toxicologia / Químico", periodicity: "Semestral" },
-    { id: 19, code: "EX-19", name: "Raio-X de Coluna Lombo-Sacra", category: "Imagem / Ergonomia", periodicity: "Bienal" },
-    { id: 20, code: "EX-20", name: "Teste Ergométrico Computadorizado", category: "Cardiológico", periodicity: "Anual" },
-    { id: 21, code: "EX-21", name: "EAS (Urina Tipo 1)", category: "Laboratorial", periodicity: "Anual" },
-    { id: 22, code: "EX-22", name: "Avaliação Odontológica Ocupacional", category: "Odontológico", periodicity: "Anual" }
-  ]);
+  // ESTADOS DOS MODAIS
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDateModalOpen, setIsDateModalOpen] = useState(false);
+  const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+
+  const [formData, setFormData] = useState({ 
+    patientName: '', cpf: '', examName: '', company: '', role: '', date: '', status: 'Pendente' 
+  });
+
+  const [newDate, setNewDate] = useState('');
+
+  // --- CARREGAR DADOS DO BACKEND APÓS AUTENTICAÇÃO ---
+  const fetchData = async () => {
+    if (!token) return;
+    try {
+      const headers = { 'Authorization': `Bearer ${token}` };
+
+      // Buscar Exames (PCMSO)
+      const resExams = await fetch(`${API_BASE_URL}/exams`, { headers });
+      if (resExams.status === 401) {
+        handleLogout(); // Se o token for inválido, desloga imediatamente
+        return;
+      }
+      if (resExams.ok) {
+        const dataExams = await resExams.json();
+        setExams(dataExams);
+      }
+
+      // Buscar Agendamentos
+      const resApps = await fetch(`${API_BASE_URL}/appointments`, { headers });
+      if (resApps.ok) {
+        const dataApps = await resApps.json();
+        const mappedApps = dataApps.map(a => ({
+          id: a.id,
+          patientName: a.patient_name || a.patientName || "Não informado",
+          cpf: a.cpf || "",
+          examName: a.exam_name || a.examName || "Exame Ocupacional",
+          company: a.company || "XIMED Cliente",
+          role: a.role || "",
+          date: a.appointment_date || a.date || "",
+          status: a.status || "Pendente"
+        }));
+        setAppointments(mappedApps);
+      }
+    } catch (err) {
+      console.error("Erro ao carregar dados da API:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (token) {
+      fetchData();
+    }
+  }, [token]);
 
   // DERIVAÇÃO DINÂMICA DE COLABORADORES
   const collaborators = useMemo(() => {
@@ -68,18 +99,6 @@ export default function App() {
       };
     });
   }, [appointments]);
-
-  // ESTADOS DOS MODAIS
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isDateModalOpen, setIsDateModalOpen] = useState(false);
-  const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState(null);
-
-  const [formData, setFormData] = useState({ 
-    patientName: '', cpf: '', examName: '', company: '', role: '', date: '', status: 'Pendente' 
-  });
-
-  const [newDate, setNewDate] = useState('');
 
   // --- AUTENTICAÇÃO ---
   const handleLogin = async (e) => {
@@ -111,6 +130,8 @@ export default function App() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     setToken('');
+    setAppointments([]);
+    setExams([]);
   };
 
   // MÁSCARA DE CPF
@@ -167,8 +188,16 @@ export default function App() {
     setIsModalOpen(false);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm("Deseja realmente cancelar este agendamento? Ele será marcado como 'Cancelado'.")) {
+      try {
+        await fetch(`${API_BASE_URL}/appointments/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+      } catch (err) {
+        console.error("Erro ao deletar agendamento no servidor:", err);
+      }
       setAppointments(appointments.map(item => 
         item.id === id ? { ...item, status: 'Cancelado' } : item
       ));
@@ -227,9 +256,9 @@ export default function App() {
   // FILTRAGEM DO CATÁLOGO DE EXAMES
   const filteredExams = useMemo(() => {
     return exams.filter(e => 
-      e.name.toLowerCase().includes(examSearchTerm.toLowerCase()) ||
-      e.code.toLowerCase().includes(examSearchTerm.toLowerCase()) ||
-      e.category.toLowerCase().includes(examSearchTerm.toLowerCase())
+      (e.name || '').toLowerCase().includes(examSearchTerm.toLowerCase()) ||
+      (e.code || '').toLowerCase().includes(examSearchTerm.toLowerCase()) ||
+      (e.category || '').toLowerCase().includes(examSearchTerm.toLowerCase())
     );
   }, [exams, examSearchTerm]);
 
@@ -237,7 +266,7 @@ export default function App() {
   const pendingCount = appointments.filter(a => a.status === 'Pendente').length;
   const canceledCount = appointments.filter(a => a.status === 'Cancelado').length;
 
-  // --- TELA DE LOGIN SE NÃO ESTIVER AUTENTICADO ---
+  // --- TELA DE LOGIN (MOSTRADA SE NÃO ESTIVER AUTENTICADO) ---
   if (!token) {
     return (
       <div className="min-h-screen w-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
@@ -261,6 +290,8 @@ export default function App() {
               <label className="block text-xs font-semibold text-slate-700 mb-1">Utilizador</label>
               <input
                 type="text"
+                name="username"
+                autoComplete="username"
                 required
                 placeholder="Ex: admin"
                 value={loginForm.username}
@@ -273,6 +304,8 @@ export default function App() {
               <label className="block text-xs font-semibold text-slate-700 mb-1">Palavra-passe</label>
               <input
                 type="password"
+                name="password"
+                autoComplete="current-password"
                 required
                 placeholder="••••••••"
                 value={loginForm.password}
@@ -623,84 +656,109 @@ export default function App() {
                 <div key={e.id} className="border border-slate-200 rounded-xl p-4 hover:border-blue-500 hover:shadow-md transition bg-slate-50/50 flex flex-col justify-between">
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-2">
-                      <span className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded">{e.code}</span>
-                      <span className="text-[10px] font-semibold text-slate-400 uppercase bg-slate-200/60 px-2 py-0.5 rounded-full">{e.periodicity}</span>
+                      <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
+                        {e.code || `EX-${e.id}`}
+                      </span>
+                      <span className="text-[11px] text-slate-400 font-medium">
+                        {e.periodicity || "Anual"}
+                      </span>
                     </div>
-                    <h3 className="font-semibold text-slate-800 text-sm leading-snug">{e.name}</h3>
+                    <h3 className="font-bold text-slate-800 text-sm mb-1">{e.name}</h3>
+                    <p className="text-xs text-slate-500 mb-3">{e.description || e.category || "Exame Ocupacional PCMSO"}</p>
                   </div>
-                  <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs text-slate-500">
-                    <span className="font-medium text-slate-600">{e.category}</span>
-                    <button 
-                      onClick={() => {
-                        setFormData({ ...formData, examName: e.name });
-                        setActiveTab('agendamentos');
-                        setIsModalOpen(true);
-                      }}
-                      className="text-blue-600 hover:text-blue-700 font-semibold text-xs hover:underline"
-                    >
-                      + Agendar
-                    </button>
+                  <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs font-semibold text-slate-700">
+                    <span>Valor Base:</span>
+                    <span className="text-emerald-600">R$ {e.price ? e.price.toFixed(2) : "0.00"}</span>
                   </div>
                 </div>
               ))}
             </div>
           </div>
         )}
-
       </main>
 
-      {/* MODAL 1: CRIAR / EDITAR AGENDAMENTO */}
+      {/* MODAL NOVO / EDITAR AGENDAMENTO */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl relative animate-in fade-in zoom-in-95 duration-150">
-            <button onClick={() => setIsModalOpen(false)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg"><X className="w-5 h-5" /></button>
-            <h3 className="text-lg font-bold text-slate-900 mb-4">{selectedItem ? 'Editar Agendamento' : 'Novo Agendamento de Exame'}</h3>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-slate-900">
+                {selectedItem ? 'Editar Agendamento' : 'Novo Agendamento'}
+              </h3>
+              <button onClick={() => setIsModalOpen(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
             <form onSubmit={handleSave} className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Nome do Paciente *</label>
-                <input type="text" required placeholder="Ex: João da Silva" value={formData.patientName} onChange={(e) => setFormData({...formData, patientName: e.target.value})} className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none" />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">CPF do Paciente</label>
-                  <input type="text" placeholder="000.000.000-00" maxLength={14} value={formData.cpf} onChange={handleCPFChange} className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Empresa</label>
-                  <input type="text" placeholder="Ex: TechCorp" value={formData.company} onChange={(e) => setFormData({...formData, company: e.target.value})} className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none" />
-                </div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nome do Colaborador *</label>
+                <input 
+                  type="text" 
+                  required 
+                  value={formData.patientName} 
+                  onChange={(e) => setFormData({ ...formData, patientName: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
+                />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">CPF *</label>
+                <input 
+                  type="text" 
+                  required 
+                  maxLength={14}
+                  value={formData.cpf} 
+                  onChange={handleCPFChange}
+                  placeholder="000.000.000-00"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Empresa Cliente *</label>
+                <input 
+                  type="text" 
+                  required 
+                  value={formData.company} 
+                  onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                  placeholder="Ex: Petrobras"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Exame Ocupacional *</label>
+                <input 
+                  type="text" 
+                  required 
+                  value={formData.examName} 
+                  onChange={(e) => setFormData({ ...formData, examName: e.target.value })}
+                  placeholder="Ex: Audiometria Ocupacional"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Cargo</label>
-                  <input type="text" placeholder="Ex: Operador" value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none" />
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Data / Hora *</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={formData.date} 
+                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                    placeholder="Ex: 24/10/2026 - 14:00"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
+                  />
                 </div>
+
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Exame *</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Status</label>
                   <select 
-                    value={formData.examName} 
-                    onChange={(e) => setFormData({...formData, examName: e.target.value})}
-                    className="w-full px-3 py-2 border rounded-xl text-sm bg-white focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
-                    required
+                    value={formData.status} 
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none bg-white"
                   >
-                    <option value="">Selecione o Exame...</option>
-                    {exams.map(e => (
-                      <option key={e.id} value={e.name}>{e.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Data e Hora *</label>
-                  <input type="text" required placeholder="Ex: 05/10/2026, 14:00" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Status Inicial</label>
-                  <select value={formData.status} onChange={(e) => setFormData({...formData, status: e.target.value})} className="w-full px-3 py-2 border rounded-xl text-sm bg-white focus:ring-2 focus:ring-blue-500/20 focus:outline-none">
                     <option value="Pendente">Pendente</option>
                     <option value="Confirmado">Confirmado</option>
                     <option value="Cancelado">Cancelado</option>
@@ -708,96 +766,85 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold hover:bg-blue-700 shadow-md">Salvar</button>
+              <div className="pt-4 flex gap-2">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2 rounded-xl text-sm transition">
+                  Cancelar
+                </button>
+                <button type="submit" className="w-1/2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-xl text-sm transition shadow-md">
+                  Guardar
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL 2: ALTERAR DATA */}
-      {isDateModalOpen && selectedItem && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-xs w-full p-6 shadow-xl relative">
-            <button onClick={() => setIsDateModalOpen(false)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg"><X className="w-5 h-5" /></button>
-            <h3 className="text-base font-bold text-slate-900 mb-3">Reagendar Exame</h3>
-            <p className="text-xs text-slate-500 mb-4">Paciente: <span className="font-semibold text-slate-800">{selectedItem.patientName}</span></p>
-            <form onSubmit={handleSaveDate} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Nova Data e Hora</label>
-                <input type="text" required value={newDate} onChange={(e) => setNewDate(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none" />
-              </div>
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setIsDateModalOpen(false)} className="px-3 py-1.5 border rounded-xl text-xs font-semibold text-slate-600">Voltar</button>
-                <button type="submit" className="px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-semibold hover:bg-blue-700">Atualizar</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 3: QUICK VIEW (VISUALIZAÇÃO RÁPIDA DE COLABORADOR / EXAME) */}
+      {/* MODAL DE FICHA RÁPIDA */}
       {isQuickViewOpen && selectedItem && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative border border-slate-100">
-            <button onClick={() => setIsQuickViewOpen(false)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg">
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
-              <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 font-bold text-lg">
-                {selectedItem.patientName ? selectedItem.patientName.charAt(0).toUpperCase() : 'C'}
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">{selectedItem.patientName || selectedItem.name}</h3>
-                <span className="text-xs text-slate-500">CPF: {selectedItem.cpf || 'Não cadastrado'}</span>
-              </div>
-            </div>
-
-            <div className="space-y-3 text-sm text-slate-700 mb-6">
-              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold">
-                  <Building className="w-4 h-4 text-slate-400" />
-                  <span>Empresa</span>
-                </div>
-                <span className="font-semibold text-slate-800">{selectedItem.company || 'XIMED Cliente'}</span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold">
-                  <Briefcase className="w-4 h-4 text-slate-400" />
-                  <span>Cargo</span>
-                </div>
-                <span className="font-semibold text-slate-800">{selectedItem.role || 'Não informado'}</span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold">
-                  <Stethoscope className="w-4 h-4 text-slate-400" />
-                  <span>Exame Registado</span>
-                </div>
-                <span className="font-semibold text-blue-600">{selectedItem.examName || 'ASO Ocupacional'}</span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold">
-                  <Calendar className="w-4 h-4 text-slate-400" />
-                  <span>Data / Hora</span>
-                </div>
-                <span className="font-semibold text-slate-800">{selectedItem.date || 'Sem data'}</span>
-              </div>
-            </div>
-
-            <div className="flex justify-end border-t border-slate-100 pt-4">
-              <button 
-                onClick={() => setIsQuickViewOpen(false)}
-                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2 rounded-xl text-xs shadow-sm transition"
-              >
-                Fechar Ficha
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-100">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900 text-base">Ficha de Atendimento</h3>
+              <button onClick={() => setIsQuickViewOpen(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+                <X className="w-5 h-5" />
               </button>
             </div>
+
+            <div className="space-y-3 text-sm text-slate-700">
+              <div>
+                <span className="text-xs text-slate-400 block">Paciente / Colaborador</span>
+                <span className="font-bold text-slate-900 text-base">{selectedItem.patientName || selectedItem.name}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-xs text-slate-400 block">CPF</span>
+                  <span className="font-medium">{selectedItem.cpf || 'Não informado'}</span>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 block">Empresa</span>
+                  <span className="font-medium">{selectedItem.company || 'XIMED Cliente'}</span>
+                </div>
+              </div>
+              <div>
+                <span className="text-xs text-slate-400 block">Exame Solicitado</span>
+                <span className="font-semibold text-blue-600">{selectedItem.examName}</span>
+              </div>
+              <div>
+                <span className="text-xs text-slate-400 block">Data do Exame</span>
+                <span className="font-medium">{selectedItem.date}</span>
+              </div>
+            </div>
+
+            <button onClick={() => setIsQuickViewOpen(false)} className="mt-6 w-full bg-slate-900 text-white font-semibold py-2 rounded-xl text-sm hover:bg-slate-800 transition">
+              Fechar Ficha
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ALTERAR DATA */}
+      {isDateModalOpen && selectedItem && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-xs w-full p-5 shadow-2xl border border-slate-100">
+            <h3 className="font-bold text-slate-900 text-sm mb-3">Reagendar Exame</h3>
+            <form onSubmit={handleSaveDate} className="space-y-3">
+              <input 
+                type="text" 
+                required 
+                value={newDate} 
+                onChange={(e) => setNewDate(e.target.value)}
+                placeholder="Ex: 28/10/2026 - 10:30"
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
+              />
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setIsDateModalOpen(false)} className="w-1/2 bg-slate-100 text-slate-700 font-semibold py-1.5 rounded-xl text-xs">
+                  Cancelar
+                </button>
+                <button type="submit" className="w-1/2 bg-blue-600 text-white font-semibold py-1.5 rounded-xl text-xs shadow-md">
+                  Confirmar
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -806,16 +853,18 @@ export default function App() {
   );
 }
 
-// COMPONENTE AUXILIAR PARA OS CARDS DE ESTATÍSTICA
+// COMPONENTE DE CARD ESTATÍSTICO
 function StatCard({ title, value, subtitle, icon }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex items-center justify-between">
+    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex items-center justify-between">
       <div>
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">{title}</span>
-        <div className="text-2xl font-bold text-slate-900">{value}</div>
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{title}</span>
+        <div className="text-2xl font-bold text-slate-900 mt-1">{value}</div>
         <span className="text-xs text-slate-500">{subtitle}</span>
       </div>
-      <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">{icon}</div>
+      <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
+        {icon}
+      </div>
     </div>
   );
 }
