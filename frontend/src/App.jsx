@@ -10,7 +10,7 @@ import {
   export default function App() {
   // --- ESTADOS DE AUTENTICAÇÃO ---
   const [token, setToken] = useState(localStorage.getItem('token') || '');
-  const [loginForm, setLoginForm] = useState({ username: 'admin', password: '123' });
+  const [loginForm, setLoginForm] = useState({ username: 'admin', password: '123456' });
   const [loginError, setLoginError] = useState('');
 
   // --- ESTADOS NATIVOS DA APLICAÇÃO ---
