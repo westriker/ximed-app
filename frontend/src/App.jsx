@@ -13,7 +13,7 @@ export default function App() {
   const [examSearchTerm, setExamSearchTerm] = useState('');
 
   // URL da foto do logo da XIMED
-const logoUrl = "https://lookaside.fbsbx.com/lookaside/crawler/instagram/ximed.sst/profile_pic.jpg";  // --- BASE DE DADOS ZERADA DE AGENDAMENTOS ---
+  const logoUrl = "/ximed.jfif";
   const [appointments, setAppointments] = useState([]);
 
   // --- CATÁLOGO DE EXAMES (22 EXAMES OCUPACIONAIS) ---
